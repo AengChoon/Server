@@ -6,11 +6,17 @@ namespace ServerCore;
 public class Session(Socket socket)
 {
     private int _disconnected;
+    private bool _isSending;
+    private readonly Queue<byte[]> _sendQueue = new Queue<byte[]>();
+    private readonly object _sendLock = new object();
+    private readonly SocketAsyncEventArgs _sendEventArgs = new SocketAsyncEventArgs();
     
     public void Start()
     {
+        _sendEventArgs.Completed += OnSend;
+        
         SocketAsyncEventArgs receiveEventArgs = new SocketAsyncEventArgs();
-        receiveEventArgs.Completed += new EventHandler<SocketAsyncEventArgs>(OnReceive);
+        receiveEventArgs.Completed += OnReceive;
         receiveEventArgs.SetBuffer(new byte[1024], 0, 1024);
         
         RegisterReceive(receiveEventArgs);
@@ -18,7 +24,12 @@ public class Session(Socket socket)
 
     public void Send(byte[] sendBuffer)
     {
-        socket.Send(sendBuffer);
+        lock (_sendLock)
+        {
+            _sendQueue.Enqueue(sendBuffer);
+            if (_isSending == false)
+                RegisterSend();
+        }
     }
 
     public void Disconnect()
@@ -28,6 +39,35 @@ public class Session(Socket socket)
         
         socket.Shutdown(SocketShutdown.Both);
         socket.Close();
+    }
+
+    private void RegisterSend()
+    {
+        _isSending = true;
+        byte[] sendBuffer = _sendQueue.Dequeue();
+        _sendEventArgs.SetBuffer(sendBuffer, 0, sendBuffer.Length);
+        
+        bool pending = socket.SendAsync(_sendEventArgs);
+        if (pending == false)
+            OnSend(null, _sendEventArgs);
+    }
+
+    private void OnSend(object? sender, SocketAsyncEventArgs sendEventArgs)
+    {
+        lock (_sendLock)
+        {
+            if (sendEventArgs is { SocketError: SocketError.Success, BytesTransferred: > 0 })
+            {
+                if (_sendQueue.Count > 0)
+                    RegisterSend();
+                else 
+                    _isSending = false;
+            }
+            else
+            {
+                Disconnect();
+            }
+        }
     }
 
     private void RegisterReceive(SocketAsyncEventArgs receiveEventArgs)
@@ -51,7 +91,7 @@ public class Session(Socket socket)
         }
         else
         {
-            
+            Disconnect();
         }
     }
 }
