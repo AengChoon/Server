@@ -1,6 +1,5 @@
 ﻿using System.Net;
 using System.Net.Sockets;
-using System.Text;
 using ServerCore;
 
 namespace Server;
@@ -23,16 +22,15 @@ internal static class Program
     {
         try
         {
-            byte[] receiveBuffer = new byte[1024];
-            int receivedBytes = clientSocket.Receive(receiveBuffer);
-            string receivedString = Encoding.UTF8.GetString(receiveBuffer, 0, receivedBytes);
-            Console.WriteLine($"[From Client] {receivedString}");
-
+            Session session = new Session(clientSocket);
+            session.Start();
+            
             byte[] sendBuffer = "Welcome to MMORPG Server!"u8.ToArray();
-            clientSocket.Send(sendBuffer);
-
-            clientSocket.Shutdown(SocketShutdown.Both);
-            clientSocket.Close();
+            session.Send(sendBuffer);
+            
+            Thread.Sleep(1000);
+            
+            session.Disconnect();
         }
         catch (Exception e)
         {

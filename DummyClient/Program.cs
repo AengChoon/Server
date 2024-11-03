@@ -21,9 +21,12 @@ internal static class Program
             {
                 socket.Connect(endPoint);
                 Console.WriteLine("Socket connected to {0}:{1}", endPoint.Address, endPoint.Port);
-            
-                byte[] sendBuffer = "Hello World!"u8.ToArray();
-                int bytesSent = socket.Send(sendBuffer);
+
+                for (int i = 0; i < 5; i++)
+                {
+                    byte[] sendBuffer = Encoding.UTF8.GetBytes($"Hello World! {i}");
+                    int bytesSent = socket.Send(sendBuffer);
+                }
             
                 byte[] receiveBuffer = new byte[1024];
                 int bytesReceived = socket.Receive(receiveBuffer);
