@@ -20,25 +20,25 @@ public class Listener
     {
         _listenSocket.Listen(10);
 
-        SocketAsyncEventArgs asyncEventArgs = new();
-        asyncEventArgs.Completed += new EventHandler<SocketAsyncEventArgs>(OnAccept);
-        RegisterAccept(asyncEventArgs);
+        SocketAsyncEventArgs acceptEventArgs = new SocketAsyncEventArgs();
+        acceptEventArgs.Completed += OnAccept;
+        RegisterAccept(acceptEventArgs);
     }
 
-    private void RegisterAccept(SocketAsyncEventArgs asyncEventArgs)
+    private void RegisterAccept(SocketAsyncEventArgs acceptEventArgs)
     {
-        asyncEventArgs.AcceptSocket = null;
+        acceptEventArgs.AcceptSocket = null;
 
-        bool pending = _listenSocket.AcceptAsync(asyncEventArgs);
+        bool pending = _listenSocket.AcceptAsync(acceptEventArgs);
         if (pending == false)
-            OnAccept(null, asyncEventArgs);
+            OnAccept(null, acceptEventArgs);
     }
 
-    private void OnAccept(object? sender, SocketAsyncEventArgs asyncEventArgs)
+    private void OnAccept(object? sender, SocketAsyncEventArgs acceptEventArgs)
     {
-        if (asyncEventArgs.SocketError == SocketError.Success)
+        if (acceptEventArgs.SocketError == SocketError.Success)
         {
-            Socket? acceptSocket = asyncEventArgs.AcceptSocket;
+            Socket? acceptSocket = acceptEventArgs.AcceptSocket;
             if (acceptSocket is null)
                 throw new NullReferenceException($"{nameof(acceptSocket)} is null");
 
@@ -46,9 +46,9 @@ public class Listener
         }
         else
         {
-            System.Console.WriteLine(asyncEventArgs.SocketError.ToString());
+            Console.WriteLine(acceptEventArgs.SocketError.ToString());
         }
         
-        RegisterAccept(asyncEventArgs);
+        RegisterAccept(acceptEventArgs);
     }
 }
