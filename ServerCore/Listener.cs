@@ -48,5 +48,7 @@ public class Listener
         {
             System.Console.WriteLine(asyncEventArgs.SocketError.ToString());
         }
+        
+        RegisterAccept(asyncEventArgs);
     }
 }
