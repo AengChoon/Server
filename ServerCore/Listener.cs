@@ -6,12 +6,12 @@ namespace ServerCore;
 public class Listener
 {
     private readonly Socket _listenSocket;
-    private readonly Action<Socket> _onAcceptHandler;
+    private readonly Func<Socket, Session> _sessionFactory;
 
-    public Listener(IPEndPoint endPoint, Action<Socket> onAcceptHandler)
+    public Listener(IPEndPoint endPoint, Func<Socket, Session> sessionFactory)
     {
         _listenSocket = new Socket(endPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-        _onAcceptHandler += onAcceptHandler;
+        _sessionFactory += sessionFactory;
 
         _listenSocket.Bind(endPoint);
     }
@@ -42,7 +42,9 @@ public class Listener
             if (acceptSocket is null)
                 throw new NullReferenceException($"{nameof(acceptSocket)} is null");
 
-            _onAcceptHandler.Invoke(acceptSocket);
+            Session session = _sessionFactory.Invoke(acceptSocket);
+            session.Start();
+            session.OnConnected(acceptSocket.RemoteEndPoint!);
         }
         else
         {

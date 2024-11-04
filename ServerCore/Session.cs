@@ -1,9 +1,10 @@
-﻿using System.Net.Sockets;
+﻿using System.Net;
+using System.Net.Sockets;
 using System.Text;
 
 namespace ServerCore;
 
-public class Session(Socket socket)
+public abstract class Session(Socket socket)
 {
     private int _disconnected;
     private readonly object _sendLock = new object();
@@ -11,6 +12,14 @@ public class Session(Socket socket)
     private readonly List<ArraySegment<byte>> _sendBufferList = [];
     private readonly SocketAsyncEventArgs _sendEventArgs = new SocketAsyncEventArgs();
     private readonly SocketAsyncEventArgs _receiveEventArgs = new SocketAsyncEventArgs();
+    
+    public abstract void OnConnected(EndPoint endPoint);
+
+    protected abstract void OnDisconnected(EndPoint endPoint);
+    
+    protected abstract void OnSend(int bytesSent);
+
+    protected abstract void OnReceive(ArraySegment<byte> buffer);
     
     public void Start()
     {
@@ -37,6 +46,7 @@ public class Session(Socket socket)
         if (Interlocked.Exchange(ref _disconnected, 1) == 1)
             return;
         
+        OnDisconnected(socket.RemoteEndPoint!);
         socket.Shutdown(SocketShutdown.Both);
         socket.Close();
     }
@@ -63,6 +73,7 @@ public class Session(Socket socket)
             {
                 _sendEventArgs.BufferList = null;
                 _sendBufferList.Clear();
+                OnSend(_sendEventArgs.BytesTransferred);
                 
                 if (_sendQueue.Count > 0)
                     RegisterSend();
@@ -87,8 +98,7 @@ public class Session(Socket socket)
         {
             if (receiveEventArgs.Buffer != null)
             {
-                string receivedString = Encoding.UTF8.GetString(receiveEventArgs.Buffer, receiveEventArgs.Offset, receiveEventArgs.BytesTransferred);
-                Console.WriteLine($"[From Client] {receivedString}");
+                OnReceive(new ArraySegment<byte>(receiveEventArgs.Buffer, receiveEventArgs.Offset, receiveEventArgs.BytesTransferred));
             }
             
             RegisterReceive();
