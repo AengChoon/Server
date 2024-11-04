@@ -5,7 +5,7 @@ using ServerCore;
 
 namespace Server;
 
-class GameSession(Socket socket) : Session(socket)
+internal class GameSession(Socket socket) : Session(socket)
 {
     public override void OnConnected(EndPoint endPoint)
     {

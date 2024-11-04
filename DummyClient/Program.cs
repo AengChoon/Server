@@ -1,8 +1,42 @@
 ﻿using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using ServerCore;
 
 namespace DummyClient;
+
+internal class GameSession(Socket socket) : Session(socket)
+{
+    public override void OnConnected(EndPoint endPoint)
+    {
+        Console.WriteLine($"Connected: {endPoint}");
+        
+        for (int i = 0; i < 5; i++)
+        {
+            byte[] sendBuffer = Encoding.UTF8.GetBytes($"Hello World! {i}");
+            Send(sendBuffer);
+        }
+    }
+
+    protected override void OnDisconnected(EndPoint endPoint)
+    {
+        Console.WriteLine($"Disconnected: {endPoint}");
+    }
+
+    protected override void OnSend(int bytesSent)
+    {
+        Console.WriteLine($"Bytes sent: {bytesSent}");
+    }
+
+    protected override void OnReceive(ArraySegment<byte> buffer)
+    {
+        if (buffer.Array == null)
+            return;
+        
+        string receivedString = Encoding.UTF8.GetString(buffer.Array, buffer.Offset, buffer.Count);
+        Console.WriteLine($"[From Server] {receivedString}");
+    }
+}
 
 internal static class Program
 {
@@ -12,29 +46,14 @@ internal static class Program
         IPHostEntry ipEntry = Dns.GetHostEntry(host);
         IPAddress ipAddress = ipEntry.AddressList[0];
         IPEndPoint endPoint = new IPEndPoint(ipAddress, 7777);
+        
+        Connector connector = new Connector();
+        connector.Connect(endPoint, (Socket clientSocket) => new GameSession(clientSocket));
 
         while (true)
         {
-            Socket socket = new Socket(endPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-
             try
             {
-                socket.Connect(endPoint);
-                Console.WriteLine("Socket connected to {0}:{1}", endPoint.Address, endPoint.Port);
-
-                for (int i = 0; i < 5; i++)
-                {
-                    byte[] sendBuffer = Encoding.UTF8.GetBytes($"Hello World! {i}");
-                    int bytesSent = socket.Send(sendBuffer);
-                }
-            
-                byte[] receiveBuffer = new byte[1024];
-                int bytesReceived = socket.Receive(receiveBuffer);
-                string receivedString = Encoding.UTF8.GetString(receiveBuffer, 0, bytesReceived);
-                Console.WriteLine($"[From Server] {receivedString}");
-            
-                socket.Shutdown(SocketShutdown.Both);
-                socket.Close();
             }
             catch (Exception e)
             {
