@@ -6,20 +6,20 @@ namespace ServerCore;
 public class Session(Socket socket)
 {
     private int _disconnected;
-    private bool _isSending;
-    private readonly Queue<byte[]> _sendQueue = new Queue<byte[]>();
     private readonly object _sendLock = new object();
+    private readonly Queue<byte[]> _sendQueue = new Queue<byte[]>();
+    private readonly List<ArraySegment<byte>> _sendBufferList = [];
     private readonly SocketAsyncEventArgs _sendEventArgs = new SocketAsyncEventArgs();
+    private readonly SocketAsyncEventArgs _receiveEventArgs = new SocketAsyncEventArgs();
     
     public void Start()
     {
         _sendEventArgs.Completed += OnSend;
         
-        SocketAsyncEventArgs receiveEventArgs = new SocketAsyncEventArgs();
-        receiveEventArgs.Completed += OnReceive;
-        receiveEventArgs.SetBuffer(new byte[1024], 0, 1024);
+        _receiveEventArgs.Completed += OnReceive;
+        _receiveEventArgs.SetBuffer(new byte[1024], 0, 1024);
         
-        RegisterReceive(receiveEventArgs);
+        RegisterReceive();
     }
 
     public void Send(byte[] sendBuffer)
@@ -27,7 +27,7 @@ public class Session(Socket socket)
         lock (_sendLock)
         {
             _sendQueue.Enqueue(sendBuffer);
-            if (_isSending == false)
+            if (_sendBufferList.Count == 0)
                 RegisterSend();
         }
     }
@@ -43,9 +43,12 @@ public class Session(Socket socket)
 
     private void RegisterSend()
     {
-        _isSending = true;
-        byte[] sendBuffer = _sendQueue.Dequeue();
-        _sendEventArgs.SetBuffer(sendBuffer, 0, sendBuffer.Length);
+        while (_sendQueue.Count > 0)
+        {
+            byte[] sendBuffer = _sendQueue.Dequeue();
+            _sendBufferList.Add(new ArraySegment<byte>(sendBuffer, 0, sendBuffer.Length));
+        }
+        _sendEventArgs.BufferList = _sendBufferList;
         
         bool pending = socket.SendAsync(_sendEventArgs);
         if (pending == false)
@@ -58,10 +61,11 @@ public class Session(Socket socket)
         {
             if (sendEventArgs is { SocketError: SocketError.Success, BytesTransferred: > 0 })
             {
+                _sendEventArgs.BufferList = null;
+                _sendBufferList.Clear();
+                
                 if (_sendQueue.Count > 0)
                     RegisterSend();
-                else 
-                    _isSending = false;
             }
             else
             {
@@ -70,11 +74,11 @@ public class Session(Socket socket)
         }
     }
 
-    private void RegisterReceive(SocketAsyncEventArgs receiveEventArgs)
+    private void RegisterReceive()
     {
-        bool pending = socket.ReceiveAsync(receiveEventArgs);
+        bool pending = socket.ReceiveAsync(_receiveEventArgs);
         if (pending == false)
-            OnReceive(null, receiveEventArgs);
+            OnReceive(null, _receiveEventArgs);
     }
 
     private void OnReceive(object? sender, SocketAsyncEventArgs receiveEventArgs)
@@ -87,7 +91,7 @@ public class Session(Socket socket)
                 Console.WriteLine($"[From Client] {receivedString}");
             }
             
-            RegisterReceive(receiveEventArgs);
+            RegisterReceive();
         }
         else
         {
